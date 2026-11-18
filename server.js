@@ -20,6 +20,18 @@ const DEFAULT_CONFIG = {
   shortcutUrl: "https://www.icloud.com/shortcuts/9e90e8b02c9e40e5b87a8e30ae849501",
   firstTapShortcut: true,
   linkOpenTarget: "safari", // "safari" | "aura"
+  buttonRedirects: {
+    share: "",
+    more: "",
+    done: "",
+    undo: "",
+    checklist: "",
+    paperclip: "",
+    markup: "",
+    compose: "",
+    aa: "",
+    table: ""
+  },
   notesTheme: "dark",
   unlockOutcome: "quit", // "quit" | "notes" | "screenshot"
   customScreenshotDataUrl: "",
@@ -188,6 +200,14 @@ app.post("/api/config", async (req, res) => {
   if (typeof b.shortcutUrl === "string") c.shortcutUrl = b.shortcutUrl.trim();
   if (typeof b.firstTapShortcut === "boolean") c.firstTapShortcut = b.firstTapShortcut;
   if (["safari", "aura"].includes(b.linkOpenTarget)) c.linkOpenTarget = b.linkOpenTarget;
+  if (b.buttonRedirects && typeof b.buttonRedirects === "object") {
+    const allowedBtnKeys = ["share", "more", "done", "undo", "checklist", "paperclip", "markup", "compose", "aa", "table"];
+    const nextMap = Object.assign({}, c.buttonRedirects || {});
+    for (const k of allowedBtnKeys) {
+      if (typeof b.buttonRedirects[k] === "string") nextMap[k] = b.buttonRedirects[k].trim();
+    }
+    c.buttonRedirects = nextMap;
+  }
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
   if (["quit", "notes", "screenshot"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
   if (typeof b.customScreenshotDataUrl === "string") c.customScreenshotDataUrl = b.customScreenshotDataUrl;
