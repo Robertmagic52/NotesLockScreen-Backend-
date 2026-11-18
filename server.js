@@ -19,6 +19,7 @@ app.use(express.urlencoded({ extended: true, limit: "18mb" }));
 const DEFAULT_CONFIG = {
   shortcutUrl: "https://www.icloud.com/shortcuts/9e90e8b02c9e40e5b87a8e30ae849501",
   firstTapShortcut: true,
+  linkOpenTarget: "safari", // "safari" | "aura"
   notesTheme: "dark",
   unlockOutcome: "quit", // "quit" | "notes" | "screenshot"
   customScreenshotDataUrl: "",
@@ -186,6 +187,7 @@ app.post("/api/config", async (req, res) => {
   const c = state.config;
   if (typeof b.shortcutUrl === "string") c.shortcutUrl = b.shortcutUrl.trim();
   if (typeof b.firstTapShortcut === "boolean") c.firstTapShortcut = b.firstTapShortcut;
+  if (["safari", "aura"].includes(b.linkOpenTarget)) c.linkOpenTarget = b.linkOpenTarget;
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
   if (["quit", "notes", "screenshot"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
   if (typeof b.customScreenshotDataUrl === "string") c.customScreenshotDataUrl = b.customScreenshotDataUrl;
