@@ -145,10 +145,36 @@ loadLocalState();
 initMongo();
 
 /* ---------------- Health / Cronjob Keep-Warm ---------------- */
+let spectatorLastSeen = 0;
+
 app.get("/healthz", (req, res) => {
   res.json({ ok: true, status: "ok", mongo: isMongoConnected, now: Date.now() });
 });
 app.get("/ping", (req, res) => res.send("pong"));
+
+app.post("/api/heartbeat", (req, res) => {
+  const b = req.body || {};
+  if (b.spectator) spectatorLastSeen = Date.now();
+  const ageMs = spectatorLastSeen ? (Date.now() - spectatorLastSeen) : -1;
+  res.json({
+    ok: true,
+    spectatorConnected: spectatorLastSeen > 0 && ageMs < 9000,
+    lastSeenMs: spectatorLastSeen,
+    ageMs,
+    mongo: isMongoConnected
+  });
+});
+
+app.get("/api/heartbeat", (req, res) => {
+  const ageMs = spectatorLastSeen ? (Date.now() - spectatorLastSeen) : -1;
+  res.json({
+    ok: true,
+    spectatorConnected: spectatorLastSeen > 0 && ageMs < 9000,
+    lastSeenMs: spectatorLastSeen,
+    ageMs,
+    mongo: isMongoConnected
+  });
+});
 
 /* ---------------- Config Sync ---------------- */
 app.get("/api/config", (req, res) => {
