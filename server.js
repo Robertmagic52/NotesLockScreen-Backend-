@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   notesTheme: "dark",
   unlockOutcome: "quit", // "quit" | "notes" | "screenshot"
   customScreenshotDataUrl: "",
+  screenshotBottomUrl: "",
   lockDigits: 4,
   lockAttemptsToUnlock: 1,
   lockGlassStyle: "liquid", // "liquid" | "crystal" | "backdrop"
@@ -162,6 +163,7 @@ app.post("/api/config", async (req, res) => {
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
   if (["quit", "notes", "screenshot"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
   if (typeof b.customScreenshotDataUrl === "string") c.customScreenshotDataUrl = b.customScreenshotDataUrl;
+  if (typeof b.screenshotBottomUrl === "string") c.screenshotBottomUrl = b.screenshotBottomUrl.trim();
   if ([4, 6].includes(Number(b.lockDigits))) c.lockDigits = Number(b.lockDigits);
   if ([1, 2, 3].includes(Number(b.lockAttemptsToUnlock))) c.lockAttemptsToUnlock = Number(b.lockAttemptsToUnlock);
   if (["liquid", "crystal", "backdrop"].includes(b.lockGlassStyle)) c.lockGlassStyle = b.lockGlassStyle;
