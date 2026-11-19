@@ -177,6 +177,7 @@ initMongo();
 
 /* ---------------- Health / Cronjob Keep-Warm ---------------- */
 let spectatorLastSeen = 0;
+let pendingCommand = null;
 
 app.get("/healthz", (req, res) => {
   res.json({
@@ -194,13 +195,23 @@ app.post("/api/heartbeat", (req, res) => {
   const b = req.body || {};
   if (b.spectator) spectatorLastSeen = Date.now();
   const ageMs = spectatorLastSeen ? (Date.now() - spectatorLastSeen) : -1;
+  const activeCmd = (pendingCommand && pendingCommand.expiresAt > Date.now()) ? pendingCommand : null;
   res.json({
     ok: true,
     spectatorConnected: spectatorLastSeen > 0 && ageMs < 9000,
     lastSeenMs: spectatorLastSeen,
     ageMs,
-    mongo: isMongoConnected
+    mongo: isMongoConnected,
+    pendingCommand: activeCmd
   });
+});
+
+app.post("/api/command", (req, res) => {
+  const b = req.body || {};
+  const type = String(b.type || "").trim();
+  if (type !== "quit") return res.status(400).json({ ok: false, error: "Unsupported command" });
+  pendingCommand = { type: "quit", id: Date.now(), expiresAt: Date.now() + 15000 };
+  res.json({ ok: true, pendingCommand });
 });
 
 app.get("/api/heartbeat", (req, res) => {
