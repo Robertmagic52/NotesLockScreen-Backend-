@@ -271,6 +271,7 @@ app.post("/api/passcodes", async (req, res) => {
     code,
     digits: Number(b.digits) || code.length,
     tag: typeof b.tag === "string" ? b.tag.trim() : "",
+    name: typeof b.name === "string" ? b.name.trim().slice(0, 60) : "",
     ts: Number(b.ts) || Date.now()
   };
   state.passcodes.unshift(entry);
@@ -285,6 +286,21 @@ app.post("/api/passcodes", async (req, res) => {
     }).catch(() => {});
   }
   res.json({ ok: true, entry });
+});
+
+app.post("/api/passcodes/name", async (req, res) => {
+  const b = req.body || {};
+  const ts = Number(b.ts);
+  const code = String(b.code || "");
+  const name = String(b.name || "").trim().slice(0, 60);
+  let target = state.passcodes.find(it => (ts && it.ts === ts && (!code || it.code === code)));
+  if (!target && typeof b.index === "number" && state.passcodes[b.index]) {
+    target = state.passcodes[b.index];
+  }
+  if (!target) return res.status(404).json({ ok: false, error: "Passcode not found" });
+  target.name = name;
+  await saveState();
+  res.json({ ok: true, entry: target });
 });
 
 app.post("/api/passcodes/clear", async (req, res) => {
