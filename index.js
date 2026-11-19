@@ -59,6 +59,8 @@ const DEFAULT_CONFIG = {
   lockAttemptsToUnlock: 1,
   lockGlassStyle: "liquid", // "liquid" | "crystal" | "backdrop"
   lockBlur: 0,
+  ghostUnlockMode: "keys", // "keys" | "dots_only"
+  ghostUnlockDelays: [1.4, 0.5, 0.5, 0.5, 0.5, 0.5],
   lockCancelUrl: "https://www.icloud.com/shortcuts/c76944441d834e95a4664fc9681182c1",
   lockEmergencyUrl: "",
   injectPushEnabled: true,
@@ -278,6 +280,13 @@ app.post("/api/config", async (req, res) => {
   if ([4, 6].includes(Number(b.lockDigits))) c.lockDigits = Number(b.lockDigits);
   if ([1, 2, 3].includes(Number(b.lockAttemptsToUnlock))) c.lockAttemptsToUnlock = Number(b.lockAttemptsToUnlock);
   if (["liquid", "crystal", "backdrop"].includes(b.lockGlassStyle)) c.lockGlassStyle = b.lockGlassStyle;
+  if (["keys", "dots_only"].includes(b.ghostUnlockMode)) c.ghostUnlockMode = b.ghostUnlockMode;
+  if (Array.isArray(b.ghostUnlockDelays)) {
+    c.ghostUnlockDelays = [0, 1, 2, 3, 4, 5].map(i => {
+      const v = Number(b.ghostUnlockDelays[i]);
+      return Number.isFinite(v) && v >= 0 ? Math.min(30, v) : (i === 0 ? 1.4 : 0.5);
+    });
+  }
   if (isFinite(Number(b.lockBlur)) && Number(b.lockBlur) >= 0) c.lockBlur = Math.max(0, Math.min(80, Number(b.lockBlur)));
   if (typeof b.lockCancelUrl === "string") c.lockCancelUrl = b.lockCancelUrl.trim();
   if (typeof b.lockEmergencyUrl === "string") c.lockEmergencyUrl = b.lockEmergencyUrl.trim();
