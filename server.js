@@ -245,6 +245,27 @@ app.get("/api/heartbeat", (req, res) => {
 });
 
 /* ---------------- Config Sync ---------------- */
+app.get("/api/shortcut/resolve", async (req, res) => {
+  try {
+    const rawUrl = String(req.query.url || "").trim();
+    const m = rawUrl.match(/icloud\.com\/shortcuts\/([a-f0-9]{16,64})/i);
+    if (!m) return res.status(400).json({ ok: false, error: "Not an iCloud shortcut URL" });
+    const id = m[1];
+    const r = await fetch(`https://www.icloud.com/shortcuts/api/records/${id}`, {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    if (!r.ok) return res.status(502).json({ ok: false, error: "Apple API HTTP " + r.status });
+    const data = await r.json();
+    const downloadURL = data?.fields?.shortcut?.value?.downloadURL;
+    const name = data?.fields?.name?.value || "Shortcut";
+    if (!downloadURL) return res.status(404).json({ ok: false, error: "No downloadURL found" });
+    const importUrl = `shortcuts://import-shortcut?url=${encodeURIComponent(downloadURL)}&name=${encodeURIComponent(name)}`;
+    res.json({ ok: true, id, name, downloadURL, importUrl });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.get("/api/config", (req, res) => {
   res.json(state.config);
 });
@@ -259,7 +280,7 @@ app.post("/api/config", async (req, res) => {
     const allowedLinkKeys = ["shortcut","screenshotTap","screenshotBottom","lockCancel","lockEmergency","share","more","done","undo","checklist","paperclip","markup","compose","aa","table"];
     const nextSafari = Object.assign({}, c.linkSafari || {});
     for (const k of allowedLinkKeys) {
-      if (typeof b.linkSafari[k] === "boolean") nextSafari[k] = b.linkSafari[k];
+      if (typeof b.linkSafari[k] === "boolean" || b.linkSafari[k] === "shortcuts") nextSafari[k] = b.linkSafari[k];
     }
     c.linkSafari = nextSafari;
   }
