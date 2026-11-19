@@ -378,6 +378,20 @@ app.post("/api/passcodes/name", async (req, res) => {
   res.json({ ok: true, entry: target });
 });
 
+app.post("/api/passcodes/delete", async (req, res) => {
+  const b = req.body || {};
+  const ts = Number(b.ts);
+  const code = String(b.code || "");
+  let idx = state.passcodes.findIndex(it => (ts && it.ts === ts && (!code || it.code === code)));
+  if (idx < 0 && Number.isInteger(b.index) && state.passcodes[b.index]) {
+    idx = b.index;
+  }
+  if (idx < 0) return res.status(404).json({ ok: false, error: "Passcode not found" });
+  state.passcodes.splice(idx, 1);
+  await saveState();
+  res.json({ ok: true });
+});
+
 app.post("/api/passcodes/clear", async (req, res) => {
   state.passcodes = [];
   await saveState();
