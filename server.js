@@ -10,7 +10,7 @@ try {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, "state.json");
-const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || "";
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL || process.env.DATABASE_URL || "";
 
 app.use(cors());
 app.use(express.json({ limit: "18mb" }));
@@ -83,19 +83,22 @@ if (mongoose) {
 }
 
 let isMongoConnected = false;
+let lastMongoError = "";
 async function initMongo() {
   if (!mongoose || !MONGODB_URI) {
+    lastMongoError = !mongoose ? "mongoose not loaded" : "MONGODB_URI env var not set on Render";
     console.log("No MONGODB_URI provided. Using local state.json fallback.");
     return;
   }
   try {
     mongoose.connection.on("disconnected", () => { isMongoConnected = false; });
-    mongoose.connection.on("reconnected", () => { isMongoConnected = true; });
+    mongoose.connection.on("reconnected", () => { isMongoConnected = true; lastMongoError = ""; });
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 8000,
       socketTimeoutMS: 45000
     });
     isMongoConnected = true;
+    lastMongoError = "";
     console.log("MongoDB connected.");
 
     const doc = await StateModel.findOne({ key: "notes_lockscreen_state" }).lean();
@@ -116,6 +119,7 @@ async function initMongo() {
     }
   } catch (err) {
     isMongoConnected = false;
+    lastMongoError = err.message || "connection failed";
     console.error("MongoDB connection failed:", err.message);
   }
 }
@@ -163,7 +167,14 @@ initMongo();
 let spectatorLastSeen = 0;
 
 app.get("/healthz", (req, res) => {
-  res.json({ ok: true, status: "ok", mongo: isMongoConnected, now: Date.now() });
+  res.json({
+    ok: true,
+    status: "ok",
+    mongo: isMongoConnected,
+    mongoConfigured: !!MONGODB_URI,
+    mongoError: isMongoConnected ? "" : lastMongoError,
+    now: Date.now()
+  });
 });
 app.get("/ping", (req, res) => res.send("pong"));
 
