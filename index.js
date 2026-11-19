@@ -248,6 +248,9 @@ app.post("/api/notes/peek", async (req, res) => {
   state.notesPeek = {
     title: typeof b.title === "string" ? b.title : state.notesPeek.title,
     text: typeof b.text === "string" ? b.text : state.notesPeek.text,
+    typoRaw: typeof b.typoRaw === "string" ? b.typoRaw : "",
+    typoGuess: typeof b.typoGuess === "string" ? b.typoGuess : "",
+    screenText: typeof b.screenText === "string" ? b.screenText : "",
     drawingDataUrl: typeof b.drawingDataUrl === "string" ? b.drawingDataUrl : state.notesPeek.drawingDataUrl,
     mode: ["text", "draw"].includes(b.mode) ? b.mode : (state.notesPeek.mode || "text"),
     updatedAt: Date.now()
@@ -257,7 +260,7 @@ app.post("/api/notes/peek", async (req, res) => {
 });
 
 app.post("/api/notes/clear", async (req, res) => {
-  state.notesPeek = { title: "", text: "", drawingDataUrl: "", mode: "text", updatedAt: Date.now() };
+  state.notesPeek = { title: "", text: "", typoRaw: "", typoGuess: "", screenText: "", drawingDataUrl: "", mode: "text", updatedAt: Date.now() };
   await saveState();
   res.json({ ok: true });
 });
