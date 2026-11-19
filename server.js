@@ -20,6 +20,23 @@ const DEFAULT_CONFIG = {
   shortcutUrl: "https://www.icloud.com/shortcuts/9e90e8b02c9e40e5b87a8e30ae849501",
   firstTapShortcut: true,
   linkOpenTarget: "safari", // "safari" | "aura"
+  linkSafari: {
+    shortcut: true,
+    screenshotTap: true,
+    screenshotBottom: true,
+    lockCancel: true,
+    lockEmergency: true,
+    share: true,
+    more: true,
+    done: true,
+    undo: true,
+    checklist: true,
+    paperclip: true,
+    markup: true,
+    compose: true,
+    aa: true,
+    table: true
+  },
   buttonRedirects: {
     share: "",
     more: "",
@@ -236,6 +253,14 @@ app.post("/api/config", async (req, res) => {
   if (typeof b.shortcutUrl === "string") c.shortcutUrl = b.shortcutUrl.trim();
   if (typeof b.firstTapShortcut === "boolean") c.firstTapShortcut = b.firstTapShortcut;
   if (["safari", "aura"].includes(b.linkOpenTarget)) c.linkOpenTarget = b.linkOpenTarget;
+  if (b.linkSafari && typeof b.linkSafari === "object") {
+    const allowedLinkKeys = ["shortcut","screenshotTap","screenshotBottom","lockCancel","lockEmergency","share","more","done","undo","checklist","paperclip","markup","compose","aa","table"];
+    const nextSafari = Object.assign({}, c.linkSafari || {});
+    for (const k of allowedLinkKeys) {
+      if (typeof b.linkSafari[k] === "boolean") nextSafari[k] = b.linkSafari[k];
+    }
+    c.linkSafari = nextSafari;
+  }
   if (b.buttonRedirects && typeof b.buttonRedirects === "object") {
     const allowedBtnKeys = ["share", "more", "done", "undo", "checklist", "paperclip", "markup", "compose", "aa", "table"];
     const nextMap = Object.assign({}, c.buttonRedirects || {});
