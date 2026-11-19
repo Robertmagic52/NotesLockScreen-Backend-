@@ -62,7 +62,9 @@ const DEFAULT_STATE = {
     mode: "text",
     updatedAt: 0
   },
-  passcodes: []
+  passcodes: [],
+  presets: [],
+  userDefaults: null
 };
 
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -112,6 +114,12 @@ async function initMongo() {
       if (Array.isArray(doc.passcodes)) {
         state.passcodes = doc.passcodes.slice(0, 60);
       }
+      if (Array.isArray(doc.presets)) {
+        state.presets = doc.presets.slice(0, 25);
+      }
+      if (doc.userDefaults && typeof doc.userDefaults === "object") {
+        state.userDefaults = doc.userDefaults;
+      }
       console.log("Loaded state from MongoDB.");
     } else {
       await StateModel.create({ key: "notes_lockscreen_state", ...state });
@@ -132,6 +140,8 @@ function loadLocalState() {
         if (raw.config) state.config = { ...DEFAULT_CONFIG, ...raw.config };
         if (raw.notesPeek) state.notesPeek = { ...DEFAULT_STATE.notesPeek, ...raw.notesPeek };
         if (Array.isArray(raw.passcodes)) state.passcodes = raw.passcodes.slice(0, 60);
+        if (Array.isArray(raw.presets)) state.presets = raw.presets.slice(0, 25);
+        if (raw.userDefaults && typeof raw.userDefaults === "object") state.userDefaults = raw.userDefaults;
       }
     }
   } catch (_) {}
@@ -149,7 +159,9 @@ async function saveState() {
           $set: {
             config: state.config,
             notesPeek: state.notesPeek,
-            passcodes: state.passcodes
+            passcodes: state.passcodes,
+            presets: state.presets,
+            userDefaults: state.userDefaults
           }
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -325,6 +337,36 @@ app.post("/api/passcodes/clear", async (req, res) => {
   state.passcodes = [];
   await saveState();
   res.json({ ok: true });
+});
+
+app.get("/api/presets", (req, res) => {
+  res.json({ ok: true, presets: state.presets || [], userDefaults: state.userDefaults || null });
+});
+
+app.post("/api/presets", async (req, res) => {
+  const b = req.body || {};
+  const name = String(b.name || "").trim().slice(0, 48);
+  const config = (b.config && typeof b.config === "object") ? b.config : { ...state.config };
+  if (!name) return res.status(400).json({ ok: false, error: "Missing preset name" });
+  const id = "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+  const entry = { id, name, config, updatedAt: Date.now() };
+  state.presets = [entry, ...(state.presets || []).filter(p => p.name.toLowerCase() !== name.toLowerCase())].slice(0, 25);
+  await saveState();
+  res.json({ ok: true, entry, presets: state.presets });
+});
+
+app.post("/api/presets/delete", async (req, res) => {
+  const id = String((req.body && req.body.id) || "");
+  state.presets = (state.presets || []).filter(p => p.id !== id);
+  await saveState();
+  res.json({ ok: true, presets: state.presets });
+});
+
+app.post("/api/presets/defaults", async (req, res) => {
+  const b = req.body || {};
+  state.userDefaults = (b.config && typeof b.config === "object") ? b.config : { ...state.config };
+  await saveState();
+  res.json({ ok: true, userDefaults: state.userDefaults });
 });
 
 /* ---------------- Wallpaper AI Clean (fal object-removal) ---------------- */
