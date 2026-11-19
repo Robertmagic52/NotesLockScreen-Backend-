@@ -37,7 +37,7 @@ const DEFAULT_CONFIG = {
   customScreenshotDataUrl: "",
   screenshotTapUrl: "",
   screenshotBottomUrl: "",
-  lockDigits: 4,
+  lockDigits: 6,
   lockAttemptsToUnlock: 1,
   lockGlassStyle: "liquid", // "liquid" | "crystal" | "backdrop"
   lockBlur: 0,
