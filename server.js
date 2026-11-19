@@ -245,6 +245,30 @@ app.get("/api/heartbeat", (req, res) => {
 });
 
 /* ---------------- Config Sync ---------------- */
+app.get("/api/shortcut/file/:file", async (req, res) => {
+  try {
+    const id = String(req.params.file || "").replace(/\.shortcut$/i, "").replace(/[^a-f0-9]/gi, "");
+    if (!id) return res.status(400).send("Invalid shortcut ID");
+    const r = await fetch(`https://www.icloud.com/shortcuts/api/records/${id}`, {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    if (!r.ok) return res.status(502).send("Upstream error");
+    const data = await r.json();
+    const rawDownloadURL = data?.fields?.shortcut?.value?.downloadURL;
+    const name = data?.fields?.name?.value || "Shortcut";
+    if (!rawDownloadURL) return res.status(404).send("Shortcut not found");
+    const downloadURL = rawDownloadURL.replace(/\$\{f\}/g, encodeURIComponent(name + ".shortcut"));
+    const fileRes = await fetch(downloadURL);
+    if (!fileRes.ok) return res.status(502).send("Download failed");
+    const buf = Buffer.from(await fileRes.arrayBuffer());
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${name.replace(/"/g, "")}.shortcut"`);
+    res.send(buf);
+  } catch (err) {
+    res.status(500).send(String(err.message || err));
+  }
+});
+
 app.get("/api/shortcut/resolve", async (req, res) => {
   try {
     const rawUrl = String(req.query.url || "").trim();
@@ -259,9 +283,11 @@ app.get("/api/shortcut/resolve", async (req, res) => {
     const rawDownloadURL = data?.fields?.shortcut?.value?.downloadURL;
     const name = data?.fields?.name?.value || "Shortcut";
     if (!rawDownloadURL) return res.status(404).json({ ok: false, error: "No downloadURL found" });
-    const downloadURL = rawDownloadURL.replace(/\$\{f\}/g, encodeURIComponent(name + ".shortcut"));
-    const importUrl = `shortcuts://import-shortcut?url=${encodeURIComponent(downloadURL)}&name=${encodeURIComponent(name)}`;
-    res.json({ ok: true, id, name, downloadURL, importUrl });
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers["x-forwarded-host"] || req.get("host");
+    const proxyUrl = `${proto}://${host}/api/shortcut/file/${id}.shortcut`;
+    const importUrl = `shortcuts://import-shortcut?url=${encodeURIComponent(proxyUrl)}&name=${encodeURIComponent(name)}`;
+    res.json({ ok: true, id, name, downloadURL: proxyUrl, importUrl });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
   }
