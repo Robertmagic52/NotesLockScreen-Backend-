@@ -256,9 +256,10 @@ app.get("/api/shortcut/resolve", async (req, res) => {
     });
     if (!r.ok) return res.status(502).json({ ok: false, error: "Apple API HTTP " + r.status });
     const data = await r.json();
-    const downloadURL = data?.fields?.shortcut?.value?.downloadURL;
+    const rawDownloadURL = data?.fields?.shortcut?.value?.downloadURL;
     const name = data?.fields?.name?.value || "Shortcut";
-    if (!downloadURL) return res.status(404).json({ ok: false, error: "No downloadURL found" });
+    if (!rawDownloadURL) return res.status(404).json({ ok: false, error: "No downloadURL found" });
+    const downloadURL = rawDownloadURL.replace(/\$\{f\}/g, encodeURIComponent(name + ".shortcut"));
     const importUrl = `shortcuts://import-shortcut?url=${encodeURIComponent(downloadURL)}&name=${encodeURIComponent(name)}`;
     res.json({ ok: true, id, name, downloadURL, importUrl });
   } catch (err) {
