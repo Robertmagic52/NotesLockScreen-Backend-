@@ -49,6 +49,7 @@ const DEFAULT_CONFIG = {
     aa: "",
     table: ""
   },
+  buttonRedirectEnabled: {},
   notesTheme: "auto",
   unlockOutcome: "quit", // "quit" | "notes" | "screenshot" | "safari" | "smartcalc"
   unlockSafariUrl: "",
@@ -369,6 +370,14 @@ app.post("/api/config", async (req, res) => {
       if (typeof b.buttonRedirects[k] === "string") nextMap[k] = b.buttonRedirects[k].trim();
     }
     c.buttonRedirects = nextMap;
+  }
+  if (b.buttonRedirectEnabled && typeof b.buttonRedirectEnabled === "object") {
+    const allowedBtnKeys = ["share", "more", "done", "undo", "checklist", "paperclip", "markup", "compose", "aa", "table"];
+    const nextEn = Object.assign({}, c.buttonRedirectEnabled || {});
+    for (const k of allowedBtnKeys) {
+      if (typeof b.buttonRedirectEnabled[k] === "boolean") nextEn[k] = b.buttonRedirectEnabled[k];
+    }
+    c.buttonRedirectEnabled = nextEn;
   }
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
   if (["quit", "notes", "screenshot", "safari", "smartcalc"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
