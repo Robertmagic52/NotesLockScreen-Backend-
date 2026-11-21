@@ -363,18 +363,27 @@ app.post("/api/config", async (req, res) => {
 let _ntfyNotesTimer = null;
 let _lastNtfyNotesMsg = "";
 async function sendNtfyNotification(title, message) {
-  const topic = String(state.config.ntfyTopic || process.env.NTFY_TOPIC || "").trim();
+  let topic = String(state.config.ntfyTopic || process.env.NTFY_TOPIC || "").trim();
+  topic = topic.replace(/^https?:\/\/ntfy\.sh\//i, "").replace(/^\/+|\/+$/g, "");
   const enabled = state.config.ntfyEnabled || (!!process.env.NTFY_TOPIC && state.config.ntfyEnabled !== false);
-  if (!topic || !enabled || !message) return;
+  if (!topic || !enabled || !message) return { ok: false, error: "ntfy not enabled or missing topic" };
   const url = "https://ntfy.sh/" + encodeURIComponent(topic);
-  const opts = { method: "POST", headers: { "Title": String(title || "Peek") }, body: String(message) };
+  const cleanTitle = String(title || "Peek").replace(/[^\x20-\x7E]/g, "-");
+  const opts = { method: "POST", headers: { "Title": cleanTitle, "Priority": "high" }, body: String(message) };
   try {
     const r = await fetch(url, opts);
     if (!r.ok) throw new Error("HTTP " + r.status);
-  } catch (_) {
+    return { ok: true };
+  } catch (err) {
     setTimeout(() => { fetch(url, opts).catch(() => {}); }, 500);
+    return { ok: false, error: String(err.message || err) };
   }
 }
+
+app.post("/api/ntfy/test", async (req, res) => {
+  const result = await sendNtfyNotification("NotesLockScreen Test", "ntfy push notifications are working!");
+  res.status(result.ok ? 200 : 502).json(result);
+});
 
 /* ---------------- Live Notes Peek ---------------- */
 app.get("/api/notes/peek", (req, res) => {
