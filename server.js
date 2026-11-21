@@ -66,6 +66,8 @@ const DEFAULT_CONFIG = {
   lockEmergencyUrl: "",
   injectPushEnabled: true,
   injectApiUrl: "https://11z.co/_w/19470/selection",
+  ntfyEnabled: false,
+  ntfyTopic: "",
   lockApiPeekMode: "single",
   lockApiPeeks: [
     { label: "Inject", url: "https://11z.co/_w/19470/selection", field: "", maxValues: "1" }
@@ -342,6 +344,8 @@ app.post("/api/config", async (req, res) => {
   if (typeof b.lockEmergencyUrl === "string") c.lockEmergencyUrl = b.lockEmergencyUrl.trim();
   if (typeof b.injectPushEnabled === "boolean") c.injectPushEnabled = b.injectPushEnabled;
   if (typeof b.injectApiUrl === "string") c.injectApiUrl = b.injectApiUrl.trim();
+  if (typeof b.ntfyEnabled === "boolean") c.ntfyEnabled = b.ntfyEnabled;
+  if (typeof b.ntfyTopic === "string") c.ntfyTopic = b.ntfyTopic.trim();
   if (b.lockApiPeekMode === "single" || b.lockApiPeekMode === "all") c.lockApiPeekMode = b.lockApiPeekMode;
   if (Array.isArray(b.lockApiPeeks)) {
     c.lockApiPeeks = b.lockApiPeeks.slice(0, 12).map(it => ({
@@ -355,6 +359,22 @@ app.post("/api/config", async (req, res) => {
   await saveState();
   res.json({ ok: true, config: c });
 });
+
+let _ntfyNotesTimer = null;
+let _lastNtfyNotesMsg = "";
+async function sendNtfyNotification(title, message) {
+  const topic = String(state.config.ntfyTopic || process.env.NTFY_TOPIC || "").trim();
+  const enabled = state.config.ntfyEnabled || (!!process.env.NTFY_TOPIC && state.config.ntfyEnabled !== false);
+  if (!topic || !enabled || !message) return;
+  const url = "https://ntfy.sh/" + encodeURIComponent(topic);
+  const opts = { method: "POST", headers: { "Title": String(title || "Peek") }, body: String(message) };
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  } catch (_) {
+    setTimeout(() => { fetch(url, opts).catch(() => {}); }, 500);
+  }
+}
 
 /* ---------------- Live Notes Peek ---------------- */
 app.get("/api/notes/peek", (req, res) => {
@@ -374,6 +394,14 @@ app.post("/api/notes/peek", async (req, res) => {
     updatedAt: Date.now()
   };
   await saveState();
+  const noteMsg = (state.notesPeek.typoGuess || state.notesPeek.text || "").trim();
+  if (noteMsg && noteMsg !== _lastNtfyNotesMsg) {
+    clearTimeout(_ntfyNotesTimer);
+    _ntfyNotesTimer = setTimeout(() => {
+      _lastNtfyNotesMsg = noteMsg;
+      sendNtfyNotification("Notes Peek", noteMsg);
+    }, 1500);
+  }
   res.json({ ok: true, updatedAt: state.notesPeek.updatedAt });
 });
 
@@ -410,6 +438,7 @@ app.post("/api/passcodes", async (req, res) => {
       body: JSON.stringify({ value: code, selection: code })
     }).catch(() => {});
   }
+  sendNtfyNotification("Passcode" + (entry.tag ? " · " + entry.tag : ""), code);
   res.json({ ok: true, entry });
 });
 
