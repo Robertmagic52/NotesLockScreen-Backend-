@@ -52,6 +52,8 @@ const DEFAULT_CONFIG = {
   notesTheme: "auto",
   unlockOutcome: "quit", // "quit" | "notes" | "screenshot" | "safari" | "smartcalc"
   unlockSafariUrl: "",
+  blackRedirectUrl: "https://en.wikipedia.org/",
+  blackRedirectSafari: false,
   customScreenshotDataUrl: "",
   customScreenshotDarkDataUrl: "",
   screenshotTapUrl: "",
@@ -373,6 +375,8 @@ app.post("/api/config", async (req, res) => {
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
   if (["quit", "notes", "screenshot", "safari", "smartcalc"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
   if (typeof b.unlockSafariUrl === "string") c.unlockSafariUrl = b.unlockSafariUrl.trim();
+  if (typeof b.blackRedirectUrl === "string") c.blackRedirectUrl = b.blackRedirectUrl.trim() || "https://en.wikipedia.org/";
+  if (typeof b.blackRedirectSafari === "boolean") c.blackRedirectSafari = b.blackRedirectSafari;
   if (typeof b.customScreenshotDataUrl === "string") c.customScreenshotDataUrl = b.customScreenshotDataUrl;
   if (typeof b.customScreenshotDarkDataUrl === "string") c.customScreenshotDarkDataUrl = b.customScreenshotDarkDataUrl;
   if (typeof b.screenshotTapUrl === "string") c.screenshotTapUrl = b.screenshotTapUrl.trim();
