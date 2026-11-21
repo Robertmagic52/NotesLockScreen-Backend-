@@ -308,7 +308,14 @@ app.get("/api/wallpaper/latest", (req, res) => {
 
 app.post("/api/wallpaper/shortcut", async (req, res) => {
   try {
-    const raw = (req.body && (req.body.image || req.body.dataUrl || req.body.image_url)) || "";
+    const b = req.body || {};
+    if (b.outUrl || (b.cleaned && b.url)) {
+      const directUrl = String(b.outUrl || b.url).trim();
+      const ts = Date.now();
+      latestWallpaper = { dataUrl: directUrl, cleaned: true, ts };
+      return res.json({ ok: true, ts, cleaned: true, url: directUrl });
+    }
+    const raw = (b.image || b.dataUrl || b.image_url) || "";
     if (!raw || typeof raw !== "string") {
       return res.status(400).json({ ok: false, error: "Missing image" });
     }
@@ -320,34 +327,21 @@ app.post("/api/wallpaper/shortcut", async (req, res) => {
     latestWallpaper = { dataUrl: image_url, cleaned: false, ts };
     res.json({ ok: true, ts });
 
-    const falKey = getSanitizedFalKey((req.body && (req.body.falKey || req.body.key)) || state.config.falKey);
+    const falKey = getSanitizedFalKey((b.falKey || b.key) || state.config.falKey);
     if (!falKey) return;
     (async () => {
       try {
-        const falRes = await fetch("https://fal.run/" + FAL_DEFAULT_MODEL, {
-          method: "POST",
-          headers: { Authorization: "Key " + falKey, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_url,
-            prompt: LOCK_UI_PROMPT,
-            object_to_remove: LOCK_UI_PROMPT,
-            aspect_ratio: "9:16"
-          })
+        const useFastMask = b.fast === true || b.maskMode === "lock" || b.maskMode === "passcode";
+        const outUrl = await runFalWallpaperClean({
+          falKey,
+          image_url,
+          model: b.model || (useFastMask ? FAL_FAST_MODEL : FAL_DEFAULT_MODEL),
+          prompt: b.prompt || LOCK_UI_PROMPT,
+          aspect_ratio: b.aspect_ratio || "9:16",
+          mask_url: b.mask_url || (useFastMask ? buildLockscreenMaskDataUrl(b.maskMode || "lock") : "")
         });
-        if (!falRes.ok) return;
-        const data = await falRes.json().catch(() => ({}));
-        const outUrl = (data.images && data.images[0] && data.images[0].url) || (data.image && data.image.url) || data.url || null;
         if (!outUrl) return;
-        let finalDataUrl = outUrl;
-        try {
-          const imgRes = await fetch(outUrl);
-          if (imgRes.ok) {
-            const ab = await imgRes.arrayBuffer();
-            const ct = imgRes.headers.get("content-type") || "image/jpeg";
-            finalDataUrl = `data:${ct};base64,${Buffer.from(ab).toString("base64")}`;
-          }
-        } catch (_) {}
-        latestWallpaper = { dataUrl: finalDataUrl, cleaned: true, ts: Date.now() };
+        latestWallpaper = { dataUrl: outUrl, cleaned: true, ts: Date.now() };
       } catch (_) {}
     })();
   } catch (err) {
@@ -599,9 +593,89 @@ function getSanitizedFalKey(overrideKey) {
   return raw.replace(/[\r\n]+/g, "").replace(/^Key\s+/i, "").replace(/^fal\s+ai\s*/i, "").trim();
 }
 
+const zlib = require("zlib");
 const FAL_DEFAULT_MODEL = "fal-ai/image-editing/object-removal";
+const FAL_FAST_MODEL = "fal-ai/bria/eraser";
 const LOCK_UI_PROMPT =
   "clock digits, date text, status bar icons, battery icon, wifi icon, lock icon, notification banner, widgets, flashlight button, camera button, home indicator bar, keypad numbers, passcode dots, circular button outlines, translucent keypad circles, glass button borders";
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (c & 1 ? 0xedb88320 : 0);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const t = Buffer.from(type, "ascii");
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
+  return Buffer.concat([len, t, data, crc]);
+}
+const _maskCache = {};
+function buildLockscreenMaskDataUrl(mode = "lock") {
+  if (_maskCache[mode]) return _maskCache[mode];
+  const W = 270, H = 585;
+  const raw = Buffer.alloc(H * (1 + W));
+  const fillRect = (x0, y0, x1, y1) => {
+    const rx0 = Math.max(0, Math.floor(x0 * W)), rx1 = Math.min(W, Math.ceil(x1 * W));
+    const ry0 = Math.max(0, Math.floor(y0 * H)), ry1 = Math.min(H, Math.ceil(y1 * H));
+    for (let y = ry0; y < ry1; y++) {
+      const off = y * (1 + W) + 1;
+      for (let x = rx0; x < rx1; x++) raw[off + x] = 255;
+    }
+  };
+  fillRect(0, 0, 1, 0.065); // status bar + dynamic island
+  if (mode === "passcode") {
+    fillRect(0.15, 0.14, 0.85, 0.30); // Enter Passcode + dots
+    fillRect(0.10, 0.32, 0.90, 0.82); // keypad circles
+    fillRect(0.08, 0.87, 0.92, 0.95); // Emergency / Cancel
+  } else {
+    fillRect(0.14, 0.09, 0.86, 0.32); // date + clock + widgets
+    fillRect(0.06, 0.85, 0.24, 0.95); // flashlight
+    fillRect(0.76, 0.85, 0.94, 0.95); // camera
+  }
+  fillRect(0.28, 0.96, 0.72, 1.0); // home bar
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
+  ihdr[8] = 8; ihdr[9] = 0; // 8-bit grayscale
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", zlib.deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0))
+  ]);
+  _maskCache[mode] = "data:image/png;base64," + png.toString("base64");
+  return _maskCache[mode];
+}
+
+async function runFalWallpaperClean({ falKey, image_url, model, prompt, aspect_ratio, mask_url }) {
+  const chosenModel = model || FAL_DEFAULT_MODEL;
+  const targetUrl = chosenModel.startsWith("http")
+    ? chosenModel
+    : "https://fal.run/" + chosenModel.replace(/^\/+/, "");
+  const payload = chosenModel.includes("bria/eraser") && mask_url
+    ? { image_url, mask_url }
+    : { image_url, prompt: prompt || LOCK_UI_PROMPT, object_to_remove: prompt || LOCK_UI_PROMPT, aspect_ratio: aspect_ratio || "9:16" };
+  const falRes = await fetch(targetUrl, {
+    method: "POST",
+    headers: { Authorization: "Key " + falKey, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const text = await falRes.text();
+  let data;
+  try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
+  if (!falRes.ok) {
+    if (chosenModel !== FAL_DEFAULT_MODEL) {
+      return runFalWallpaperClean({ falKey, image_url, model: FAL_DEFAULT_MODEL, prompt, aspect_ratio });
+    }
+    throw new Error((data && (data.detail || data.error || data.message)) || ("fal error " + falRes.status));
+  }
+  return (data.images && data.images[0] && data.images[0].url) || (data.image && data.image.url) || data.url || null;
+}
 
 app.post("/api/wallpaper/clean", async (req, res) => {
   try {
@@ -620,53 +694,19 @@ app.post("/api/wallpaper/clean", async (req, res) => {
     if (!image_url.startsWith("data:") && !image_url.startsWith("http")) {
       image_url = "data:image/jpeg;base64," + image_url;
     }
-    const prompt = (req.body && typeof req.body.prompt === "string" && req.body.prompt.trim()) || LOCK_UI_PROMPT;
-    const requestedModel = (req.body && req.body.model) || FAL_DEFAULT_MODEL;
-    const targetUrl = requestedModel.startsWith("http")
-      ? requestedModel
-      : "https://fal.run/" + requestedModel.replace(/^\/+/, "");
-
-    const falRes = await fetch(targetUrl, {
-      method: "POST",
-      headers: { Authorization: "Key " + falKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        image_url,
-        prompt,
-        object_to_remove: prompt,
-        aspect_ratio: (req.body && req.body.aspect_ratio) || "9:16"
-      })
+    const b = req.body || {};
+    const useFastMask = b.fast === true || b.maskMode === "lock" || b.maskMode === "passcode";
+    const requestedModel = b.model || (useFastMask ? FAL_FAST_MODEL : FAL_DEFAULT_MODEL);
+    const outUrl = await runFalWallpaperClean({
+      falKey,
+      image_url,
+      model: requestedModel,
+      prompt: (typeof b.prompt === "string" && b.prompt.trim()) || LOCK_UI_PROMPT,
+      aspect_ratio: b.aspect_ratio || "9:16",
+      mask_url: b.mask_url || (useFastMask ? buildLockscreenMaskDataUrl(b.maskMode || "lock") : "")
     });
-
-    const text = await falRes.text();
-    let data;
-    try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
-    if (!falRes.ok) {
-      return res.status(502).json({
-        ok: false,
-        error: (data && (data.detail || data.error || data.message)) || ("fal error " + falRes.status),
-        status: falRes.status
-      });
-    }
-
-    const outUrl =
-      (data.images && data.images[0] && data.images[0].url) ||
-      (data.image && data.image.url) ||
-      data.url ||
-      null;
-    if (!outUrl) return res.status(502).json({ ok: false, error: "No image in fal response", data });
-
-    let dataUrl = null;
-    try {
-      const imgRes = await fetch(outUrl);
-      if (imgRes.ok) {
-        const ab = await imgRes.arrayBuffer();
-        const b64 = Buffer.from(ab).toString("base64");
-        const ct = imgRes.headers.get("content-type") || "image/jpeg";
-        dataUrl = `data:${ct};base64,${b64}`;
-      }
-    } catch (_) {}
-
-    return res.json({ ok: true, url: outUrl, dataUrl: dataUrl || outUrl, model: requestedModel });
+    if (!outUrl) return res.status(502).json({ ok: false, error: "No image in fal response" });
+    return res.json({ ok: true, url: outUrl, dataUrl: outUrl, model: requestedModel });
   } catch (err) {
     console.error("wallpaper clean failed", err);
     return res.status(500).json({ ok: false, error: err.message || "clean failed" });
