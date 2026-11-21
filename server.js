@@ -332,14 +332,12 @@ app.post("/api/wallpaper/shortcut", async (req, res) => {
     if (!falKey) return;
     (async () => {
       try {
-        const useFastMask = b.fast === true || b.maskMode === "lock" || b.maskMode === "passcode";
         const outUrl = await runFalWallpaperClean({
           falKey,
           image_url,
-          model: b.model || (useFastMask ? FAL_FAST_MODEL : FAL_DEFAULT_MODEL),
+          model: b.model || FAL_DEFAULT_MODEL,
           prompt: b.prompt || LOCK_UI_PROMPT,
-          aspect_ratio: b.aspect_ratio || "9:16",
-          mask_url: b.mask_url || (useFastMask ? buildLockscreenMaskDataUrl(b.maskMode || "lock") : "")
+          aspect_ratio: b.aspect_ratio || "9:16"
         });
         if (!outUrl) return;
         latestWallpaper = { dataUrl: outUrl, cleaned: true, ts: Date.now() };
@@ -697,15 +695,14 @@ app.post("/api/wallpaper/clean", async (req, res) => {
       image_url = "data:image/jpeg;base64," + image_url;
     }
     const b = req.body || {};
-    const useFastMask = b.fast === true || b.maskMode === "lock" || b.maskMode === "passcode";
-    const requestedModel = b.model || (useFastMask ? FAL_FAST_MODEL : FAL_DEFAULT_MODEL);
+    const requestedModel = b.model || FAL_DEFAULT_MODEL;
     const outUrl = await runFalWallpaperClean({
       falKey,
       image_url,
       model: requestedModel,
       prompt: (typeof b.prompt === "string" && b.prompt.trim()) || LOCK_UI_PROMPT,
       aspect_ratio: b.aspect_ratio || "9:16",
-      mask_url: b.mask_url || (useFastMask ? buildLockscreenMaskDataUrl(b.maskMode || "lock") : "")
+      mask_url: b.mask_url || ""
     });
     if (!outUrl) return res.status(502).json({ ok: false, error: "No image in fal response" });
     return res.json({ ok: true, url: outUrl, dataUrl: outUrl, model: requestedModel });
