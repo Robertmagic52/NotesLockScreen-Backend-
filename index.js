@@ -466,7 +466,7 @@ app.post("/api/notes/peek", async (req, res) => {
     typoRaw: typeof b.typoRaw === "string" ? b.typoRaw : "",
     typoGuess: typeof b.typoGuess === "string" ? b.typoGuess : "",
     screenText: typeof b.screenText === "string" ? b.screenText : "",
-    drawingDataUrl: typeof b.drawingDataUrl === "string" ? b.drawingDataUrl : state.notesPeek.drawingDataUrl,
+    drawingDataUrl: (typeof b.drawingDataUrl === "string" && b.drawingDataUrl.trim()) ? b.drawingDataUrl : state.notesPeek.drawingDataUrl,
     mode: ["text", "draw"].includes(b.mode) ? b.mode : (state.notesPeek.mode || "text"),
     updatedAt: Date.now()
   };
