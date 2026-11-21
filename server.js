@@ -50,7 +50,8 @@ const DEFAULT_CONFIG = {
     table: ""
   },
   notesTheme: "auto",
-  unlockOutcome: "quit", // "quit" | "notes" | "screenshot"
+  unlockOutcome: "quit", // "quit" | "notes" | "screenshot" | "safari"
+  unlockSafariUrl: "",
   customScreenshotDataUrl: "",
   customScreenshotDarkDataUrl: "",
   screenshotTapUrl: "",
@@ -372,7 +373,8 @@ app.post("/api/config", async (req, res) => {
     c.buttonRedirects = nextMap;
   }
   if (["dark", "light", "auto"].includes(b.notesTheme)) c.notesTheme = b.notesTheme;
-  if (["quit", "notes", "screenshot"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
+  if (["quit", "notes", "screenshot", "safari"].includes(b.unlockOutcome)) c.unlockOutcome = b.unlockOutcome;
+  if (typeof b.unlockSafariUrl === "string") c.unlockSafariUrl = b.unlockSafariUrl.trim();
   if (typeof b.customScreenshotDataUrl === "string") c.customScreenshotDataUrl = b.customScreenshotDataUrl;
   if (typeof b.customScreenshotDarkDataUrl === "string") c.customScreenshotDarkDataUrl = b.customScreenshotDarkDataUrl;
   if (typeof b.screenshotTapUrl === "string") c.screenshotTapUrl = b.screenshotTapUrl.trim();
