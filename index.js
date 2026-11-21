@@ -59,6 +59,7 @@ const DEFAULT_CONFIG = {
   lockAttemptsToUnlock: 1,
   lockGlassStyle: "liquid", // "liquid" | "crystal" | "backdrop"
   lockBlur: 0,
+  falKey: "",
   ghostUnlockMode: "keys", // "keys" | "dots_only"
   ghostUnlockDelays: [1.4, 0.5, 0.5, 0.5, 0.5, 0.5],
   lockCancelUrl: "https://www.icloud.com/shortcuts/c76944441d834e95a4664fc9681182c1",
@@ -336,6 +337,7 @@ app.post("/api/config", async (req, res) => {
     });
   }
   if (isFinite(Number(b.lockBlur)) && Number(b.lockBlur) >= 0) c.lockBlur = Math.max(0, Math.min(80, Number(b.lockBlur)));
+  if (typeof b.falKey === "string") c.falKey = b.falKey.trim();
   if (typeof b.lockCancelUrl === "string") c.lockCancelUrl = b.lockCancelUrl.trim();
   if (typeof b.lockEmergencyUrl === "string") c.lockEmergencyUrl = b.lockEmergencyUrl.trim();
   if (typeof b.injectPushEnabled === "boolean") c.injectPushEnabled = b.injectPushEnabled;
