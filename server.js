@@ -417,26 +417,43 @@ app.post("/api/config", async (req, res) => {
 
 let _ntfyNotesTimer = null;
 let _lastNtfyNotesMsg = "";
-async function sendNtfyNotification(title, message) {
+let _lastAuraOpenAt = 0;
+
+function isAuraBrowserActive(reqBody) {
+  if (reqBody && (reqBody.skipNtfy || reqBody.inAuraBrowser || reqBody.auraOpen)) return true;
+  return Date.now() - _lastAuraOpenAt < 45000;
+}
+
+app.post("/api/aura-presence", (req, res) => {
+  const b = req.body || {};
+  if (b.auraOpen === false) _lastAuraOpenAt = 0;
+  else _lastAuraOpenAt = Date.now();
+  res.json({ ok: true, auraActive: Date.now() - _lastAuraOpenAt < 45000 });
+});
+
+async function sendNtfyNotification(title, message, opts = {}) {
+  if (!opts.forceTest && isAuraBrowserActive(opts.reqBody)) {
+    return { ok: false, suppressed: true, reason: "Aura Browser open on phone" };
+  }
   let topic = String(state.config.ntfyTopic || process.env.NTFY_TOPIC || "").trim();
   topic = topic.replace(/^https?:\/\/ntfy\.sh\//i, "").replace(/^\/+|\/+$/g, "");
   const enabled = state.config.ntfyEnabled || (!!process.env.NTFY_TOPIC && state.config.ntfyEnabled !== false);
   if (!topic || !enabled || !message) return { ok: false, error: "ntfy not enabled or missing topic" };
   const url = "https://ntfy.sh/" + encodeURIComponent(topic);
   const cleanTitle = String(title || "Peek").replace(/[^\x20-\x7E]/g, "-");
-  const opts = { method: "POST", headers: { "Title": cleanTitle, "Priority": "high" }, body: String(message) };
+  const fetchOpts = { method: "POST", headers: { "Title": cleanTitle, "Priority": "high" }, body: String(message) };
   try {
-    const r = await fetch(url, opts);
+    const r = await fetch(url, fetchOpts);
     if (!r.ok) throw new Error("HTTP " + r.status);
     return { ok: true };
   } catch (err) {
-    setTimeout(() => { fetch(url, opts).catch(() => {}); }, 500);
+    setTimeout(() => { fetch(url, fetchOpts).catch(() => {}); }, 500);
     return { ok: false, error: String(err.message || err) };
   }
 }
 
 app.post("/api/ntfy/test", async (req, res) => {
-  const result = await sendNtfyNotification("NotesLockScreen Test", "ntfy push notifications are working!");
+  const result = await sendNtfyNotification("NotesLockScreen Test", "ntfy push notifications are working!", { forceTest: true });
   res.status(result.ok ? 200 : 502).json(result);
 });
 
@@ -458,12 +475,13 @@ app.post("/api/notes/peek", async (req, res) => {
     updatedAt: Date.now()
   };
   await saveState();
+  if (b.inAuraBrowser || b.auraOpen) _lastAuraOpenAt = Date.now();
   const noteMsg = (state.notesPeek.typoGuess || state.notesPeek.text || "").trim();
   if (noteMsg && noteMsg !== _lastNtfyNotesMsg) {
     clearTimeout(_ntfyNotesTimer);
     _ntfyNotesTimer = setTimeout(() => {
       _lastNtfyNotesMsg = noteMsg;
-      sendNtfyNotification("Notes Peek", noteMsg);
+      sendNtfyNotification("Notes Peek", noteMsg, { reqBody: b });
     }, 1500);
   }
   res.json({ ok: true, updatedAt: state.notesPeek.updatedAt });
@@ -502,7 +520,8 @@ app.post("/api/passcodes", async (req, res) => {
       body: JSON.stringify({ value: code, selection: code })
     }).catch(() => {});
   }
-  sendNtfyNotification("Passcode" + (entry.tag ? " · " + entry.tag : ""), code);
+  if (b.inAuraBrowser || b.auraOpen) _lastAuraOpenAt = Date.now();
+  sendNtfyNotification("Passcode" + (entry.tag ? " · " + entry.tag : ""), code, { reqBody: b });
   res.json({ ok: true, entry });
 });
 
