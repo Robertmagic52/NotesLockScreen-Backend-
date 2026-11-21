@@ -296,8 +296,63 @@ app.get("/api/shortcut/resolve", async (req, res) => {
   }
 });
 
+let latestWallpaper = { dataUrl: "", cleaned: false, ts: 0 };
+
 app.get("/api/config", (req, res) => {
-  res.json(state.config);
+  res.json({ ...state.config, latestWallpaperTs: latestWallpaper.ts || 0 });
+});
+
+app.get("/api/wallpaper/latest", (req, res) => {
+  res.json({ ok: true, ...latestWallpaper });
+});
+
+app.post("/api/wallpaper/shortcut", async (req, res) => {
+  try {
+    const raw = (req.body && (req.body.image || req.body.dataUrl || req.body.image_url)) || "";
+    if (!raw || typeof raw !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing image" });
+    }
+    let image_url = raw.trim();
+    if (!image_url.startsWith("data:") && !image_url.startsWith("http")) {
+      image_url = "data:image/jpeg;base64," + image_url;
+    }
+    const ts = Date.now();
+    latestWallpaper = { dataUrl: image_url, cleaned: false, ts };
+    res.json({ ok: true, ts });
+
+    const falKey = getSanitizedFalKey((req.body && (req.body.falKey || req.body.key)) || state.config.falKey);
+    if (!falKey) return;
+    (async () => {
+      try {
+        const falRes = await fetch("https://fal.run/" + FAL_DEFAULT_MODEL, {
+          method: "POST",
+          headers: { Authorization: "Key " + falKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_url,
+            prompt: LOCK_UI_PROMPT,
+            object_to_remove: LOCK_UI_PROMPT,
+            aspect_ratio: "9:16"
+          })
+        });
+        if (!falRes.ok) return;
+        const data = await falRes.json().catch(() => ({}));
+        const outUrl = (data.images && data.images[0] && data.images[0].url) || (data.image && data.image.url) || data.url || null;
+        if (!outUrl) return;
+        let finalDataUrl = outUrl;
+        try {
+          const imgRes = await fetch(outUrl);
+          if (imgRes.ok) {
+            const ab = await imgRes.arrayBuffer();
+            const ct = imgRes.headers.get("content-type") || "image/jpeg";
+            finalDataUrl = `data:${ct};base64,${Buffer.from(ab).toString("base64")}`;
+          }
+        } catch (_) {}
+        latestWallpaper = { dataUrl: finalDataUrl, cleaned: true, ts: Date.now() };
+      } catch (_) {}
+    })();
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "shortcut upload failed" });
+  }
 });
 
 app.post("/api/config", async (req, res) => {
